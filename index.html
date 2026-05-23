@@ -152,7 +152,7 @@
             <div class="logo">JsGram</div>
             <div class="auth-box">
                 <h2>Вход в JsGram</h2>
-                <input type="text" id="auth-login" placeholder="Email или @username" autocomplete="username">
+                <input type="text" id="auth-login" placeholder="Email" autocomplete="email">
                 <input type="password" id="auth-password" placeholder="Пароль" autocomplete="current-password">
                 <button onclick="sendCode()">Получить код</button>
                 <button class="secondary" onclick="showRegister()">Создать аккаунт</button>
@@ -187,7 +187,6 @@
                 <input type="text" id="reg-name" placeholder="Имя" maxlength="32">
                 <input type="email" id="reg-email" placeholder="Email" autocomplete="email">
                 <input type="password" id="reg-password" placeholder="Пароль (мин. 6 символов)">
-                <input type="text" id="reg-username" placeholder="@username (латиница)" maxlength="20">
                 <button onclick="register()">Зарегистрироваться</button>
                 <button class="secondary" onclick="showLogin()">Уже есть аккаунт</button>
                 <div id="reg-error" class="error"></div>
@@ -252,17 +251,32 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h3>Настройки профиля</h3>
+            <div class="profile-avatar" id="settings-avatar" style="width:60px;height:60px;font-size:24px;margin:0 auto 12px;">?</div>
+            <input type="text" id="settings-name" placeholder="Имя">
+            <input type="text" id="settings-username" placeholder="@username (латиница)" maxlength="20">
+            <p id="settings-username-status" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;"></p>
+            <button onclick="saveSettings()">Сохранить</button>
+            <button class="secondary" onclick="closeModal('settings-modal')">Отмена</button>
+            <div id="settings-error" class="error"></div>
+        </div>
+    </div>
+
     <!-- Menu Drawer -->
     <div class="drawer" id="drawer">
         <div class="drawer-header">
             <div class="drawer-avatar" id="drawer-avatar">?</div>
             <div class="drawer-info">
                 <div id="drawer-name">Имя</div>
+                <div id="drawer-username" style="font-size:12px;opacity:0.7;">@username</div>
                 <div id="drawer-phone">online</div>
             </div>
         </div>
         <div class="drawer-menu">
-            <div class="menu-item" onclick="showSettings()">⚙️ Настройки</div>
+            <div class="menu-item" onclick="showSettingsModal()">⚙️ Профиль</div>
             <div class="menu-item" onclick="toggleTheme()">🌓 Тема</div>
             <div class="menu-item" onclick="logout()">🚪 Выйти</div>
         </div>
@@ -282,6 +296,7 @@
         let messagesListener = null;
         let pendingLogin = null;
         let codeTimer = null;
+        let currentUserData = null;
 
         const db = firebase.database();
         const auth = firebase.auth();
@@ -324,59 +339,27 @@
             return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
-        // ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ ВХОДА =====
         function sendCode() {
-            const loginInput = document.getElementById('auth-login').value.trim().toLowerCase();
+            const email = document.getElementById('auth-login').value.trim().toLowerCase();
             const password = document.getElementById('auth-password').value;
             const errorEl = document.getElementById('auth-error');
             
-            if (!loginInput || !password) {
-                errorEl.textContent = 'Введите логин и пароль';
+            if (!email || !password) {
+                errorEl.textContent = 'Введите email и пароль';
                 return;
             }
             if (password.length < 6) {
                 errorEl.textContent = 'Пароль минимум 6 символов';
                 return;
             }
-
-            errorEl.textContent = 'Проверка...';
-
-            // Если ввели email напрямую
-            if (loginInput.includes('@')) {
-                verifyAndSendCode(loginInput, password, errorEl);
+            if (!email.includes('@')) {
+                errorEl.textContent = 'Введите корректный email';
                 return;
             }
 
-            // Если ввели username — ищем email через Cloud Function или публичный endpoint
-            // Но т.к. у нас нет бэкенда — делаем через временный анонимный вход
-            const username = loginInput.startsWith('@') ? loginInput.slice(1) : loginInput;
-            
-            // Сначала анонимный вход чтобы получить доступ к базе
-            auth.signInAnonymously().then(() => {
-                return db.ref('usernames/' + username).once('value');
-            }).then(snap => {
-                const uid = snap.val();
-                if (!uid) throw new Error('Пользователь не найден');
-                return db.ref('users/' + uid + '/email').once('value');
-            }).then(emailSnap => {
-                const email = emailSnap.val();
-                if (!email) throw new Error('Email не найден');
-                
-                // Выходим из анонима и проверяем пароль
-                return auth.signOut().then(() => {
-                    return verifyAndSendCode(email, password, errorEl);
-                });
-            }).catch(err => {
-                // Если уже анонимно вошли — выходим
-                auth.signOut().catch(() => {});
-                errorEl.textContent = err.message || 'Ошибка поиска пользователя';
-            });
-        }
+            errorEl.textContent = 'Проверка...';
 
-        function verifyAndSendCode(email, password, errorEl) {
-            // Проверяем пароль через временный вход
             auth.signInWithEmailAndPassword(email, password).then(cred => {
-                // Пароль верный — выходим, требуем код
                 return auth.signOut().then(() => email);
             }).catch(err => {
                 if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
@@ -479,14 +462,14 @@
                 });
         }
 
+        // ===== РЕГИСТРАЦИЯ: ТОЛЬКО EMAIL+ПАРОЛЬ =====
         function register() {
             const name = document.getElementById('reg-name').value.trim();
             const email = document.getElementById('reg-email').value.trim();
             const password = document.getElementById('reg-password').value;
-            const username = document.getElementById('reg-username').value.trim().toLowerCase();
             const errorEl = document.getElementById('reg-error');
             
-            if (!name || !email || !password || !username) {
+            if (!name || !email || !password) {
                 errorEl.textContent = 'Заполните все поля';
                 return;
             }
@@ -494,24 +477,19 @@
                 errorEl.textContent = 'Пароль минимум 6 символов';
                 return;
             }
-            if (!username.match(/^[a-z0-9_]+$/)) {
-                errorEl.textContent = 'Username: только латиница, цифры и _';
+            if (!email.includes('@')) {
+                errorEl.textContent = 'Введите корректный email';
                 return;
             }
             
-            errorEl.textContent = 'Регистрация...';
+            errorEl.textContent = 'Создание аккаунта...';
             
-            db.ref('usernames/' + username).once('value').then(snap => {
-                if (snap.exists()) {
-                    throw new Error('Этот username уже занят');
-                }
-                return auth.createUserWithEmailAndPassword(email, password);
-            }).then(cred => {
+            auth.createUserWithEmailAndPassword(email, password).then(cred => {
                 const userData = {
                     uid: cred.user.uid,
                     name: name,
                     email: email,
-                    username: username,
+                    username: '',  // Пусто! Поставит потом в настройках
                     avatar: name.charAt(0).toUpperCase(),
                     status: 'online',
                     lastSeen: Date.now()
@@ -519,8 +497,8 @@
                 
                 const updates = {};
                 updates['users/' + cred.user.uid] = userData;
-                updates['usernames/' + username] = cred.user.uid;
                 updates['emails/' + email.replace(/\./g, ',')] = cred.user.uid;
+                // usernames НЕ создаём — пользователь сам потом
                 
                 return db.ref().update(updates);
             }).then(() => {
@@ -528,11 +506,11 @@
                     emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
                         to_email: email,
                         to_name: name,
-                        message: 'Добро пожаловать в JsGram! Ваш аккаунт успешно создан.'
+                        message: 'Добро пожаловать в JsGram! Ваш аккаунт успешно создан. Установите username в настройках профиля.'
                     }).catch(err => console.log('Email error:', err));
                 }
             }).catch(err => {
-                errorEl.textContent = err.message || getAuthError(err.code) || 'Ошибка регистрации';
+                errorEl.textContent = getAuthError(err.code) || err.message || 'Ошибка регистрации';
             });
         }
 
@@ -546,6 +524,7 @@
             closeChat();
             pendingLogin = null;
             clearInterval(codeTimer);
+            currentUserData = null;
         }
 
         function getAuthError(code) {
@@ -576,14 +555,94 @@
             });
             
             db.ref('users/' + currentUser.uid).once('value').then(snap => {
-                const data = snap.val();
-                if (data) {
-                    document.getElementById('drawer-name').textContent = data.name;
-                    document.getElementById('drawer-avatar').textContent = data.avatar;
-                }
+                currentUserData = snap.val() || {};
+                document.getElementById('drawer-name').textContent = currentUserData.name || 'Имя';
+                document.getElementById('drawer-avatar').textContent = currentUserData.avatar || '?';
+                document.getElementById('drawer-username').textContent = currentUserData.username ? '@' + currentUserData.username : 'Установите username';
             });
             
             loadChats();
+        }
+
+        // ===== НАСТРОЙКИ ПРОФИЛЯ =====
+        function showSettingsModal() {
+            if (!currentUserData) return;
+            
+            document.getElementById('settings-avatar').textContent = currentUserData.avatar || '?';
+            document.getElementById('settings-name').value = currentUserData.name || '';
+            document.getElementById('settings-username').value = currentUserData.username || '';
+            document.getElementById('settings-error').textContent = '';
+            document.getElementById('settings-username-status').textContent = '';
+            
+            closeDrawer();
+            document.getElementById('settings-modal').classList.add('active');
+        }
+
+        function saveSettings() {
+            const name = document.getElementById('settings-name').value.trim();
+            const username = document.getElementById('settings-username').value.trim().toLowerCase();
+            const errorEl = document.getElementById('settings-error');
+            const statusEl = document.getElementById('settings-username-status');
+            
+            if (!name) {
+                errorEl.textContent = 'Введите имя';
+                return;
+            }
+            
+            errorEl.textContent = 'Сохранение...';
+            
+            const updates = {};
+            updates['users/' + currentUser.uid + '/name'] = name;
+            updates['users/' + currentUser.uid + '/avatar'] = name.charAt(0).toUpperCase();
+            
+            // Если username изменился и не пустой
+            if (username && username !== currentUserData.username) {
+                if (!username.match(/^[a-z0-9_]+$/)) {
+                    errorEl.textContent = 'Username: только латиница, цифры и _';
+                    return;
+                }
+                
+                // Проверяем занятость
+                db.ref('usernames/' + username).once('value').then(snap => {
+                    if (snap.exists() && snap.val() !== currentUser.uid) {
+                        errorEl.textContent = 'Этот username уже занят';
+                        return;
+                    }
+                    
+                    // Удаляем старый username если был
+                    if (currentUserData.username) {
+                        updates['usernames/' + currentUserData.username] = null;
+                    }
+                    
+                    updates['usernames/' + username] = currentUser.uid;
+                    updates['users/' + currentUser.uid + '/username'] = username;
+                    
+                    return db.ref().update(updates);
+                }).then(() => {
+                    currentUserData.name = name;
+                    currentUserData.username = username;
+                    currentUserData.avatar = name.charAt(0).toUpperCase();
+                    
+                    document.getElementById('drawer-name').textContent = name;
+                    document.getElementById('drawer-avatar').textContent = currentUserData.avatar;
+                    document.getElementById('drawer-username').textContent = '@' + username;
+                    
+                    closeModal('settings-modal');
+                }).catch(err => {
+                    errorEl.textContent = err.message || 'Ошибка сохранения';
+                });
+            } else {
+                // Только имя меняем
+                db.ref().update(updates).then(() => {
+                    currentUserData.name = name;
+                    currentUserData.avatar = name.charAt(0).toUpperCase();
+                    document.getElementById('drawer-name').textContent = name;
+                    document.getElementById('drawer-avatar').textContent = currentUserData.avatar;
+                    closeModal('settings-modal');
+                }).catch(err => {
+                    errorEl.textContent = err.message || 'Ошибка сохранения';
+                });
+            }
         }
 
         function loadChats() {
@@ -855,7 +914,7 @@
                 
                 document.getElementById('profile-avatar').textContent = data.avatar;
                 document.getElementById('profile-name').textContent = data.name;
-                document.getElementById('profile-username').textContent = '@' + data.username;
+                document.getElementById('profile-username').textContent = data.username ? '@' + data.username : 'Нет username';
                 document.getElementById('profile-status').textContent = data.status === 'online' ? 'В сети' : 'Не в сети';
                 
                 document.getElementById('profile-modal').classList.add('active');
