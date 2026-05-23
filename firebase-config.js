@@ -1,4 +1,3 @@
-// ЗАМЕНИ ЭТИ ЗНАЧЕНИЯ НА СВОИ ИЗ FIREBASE CONSOLE!
 const firebaseConfig = {
     apiKey: "ВАШ_API_KEY",
     authDomain: "ВАШ_ПРОЕКТ.firebaseapp.com",
@@ -9,13 +8,11 @@ const firebaseConfig = {
     appId: "ВАШ_APP_ID"
 };
 
-// EmailJS конфиг (заполни после регистрации на emailjs.com)
 const EMAILJS_CONFIG = {
     publicKey: "ВАШ_PUBLIC_KEY",
     serviceId: "ВАШ_SERVICE_ID",
     templateId: "ВАШ_TEMPLATE_ID"
 };
 
-// Инициализация
 firebase.initializeApp(firebaseConfig);
 emailjs.init(EMAILJS_CONFIG.publicKey);
