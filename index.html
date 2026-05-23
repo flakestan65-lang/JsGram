@@ -18,6 +18,7 @@
             --border: #0e1621;
             --online: #4dcd5e;
             --error: #e74c3c;
+            --success: #4dcd5e;
             --shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
@@ -50,7 +51,10 @@
         .auth-box button { width: 100%; padding: 12px; margin-top: 8px; border: none; border-radius: 8px; background: var(--accent); color: white; font-size: 15px; cursor: pointer; transition: 0.2s; }
         .auth-box button:hover { background: var(--accent-hover); }
         .auth-box button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+        .auth-box button:disabled { opacity: 0.5; cursor: not-allowed; }
         .error { color: var(--error); font-size: 13px; margin-top: 8px; text-align: center; min-height: 18px; }
+        .success { color: var(--success); font-size: 13px; margin-top: 8px; text-align: center; min-height: 18px; }
+        .timer { color: var(--text-secondary); font-size: 12px; text-align: center; margin-top: 8px; }
 
         #main-screen { flex-direction: row; }
         .sidebar { width: 320px; min-width: 280px; max-width: 35%; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; position: relative; }
@@ -148,11 +152,28 @@
             <div class="logo">JsGram</div>
             <div class="auth-box">
                 <h2>Вход в JsGram</h2>
-                <input type="email" id="auth-email" placeholder="Email" autocomplete="email">
+                <input type="text" id="auth-login" placeholder="Email или @username" autocomplete="username">
                 <input type="password" id="auth-password" placeholder="Пароль" autocomplete="current-password">
-                <button onclick="login()">Войти</button>
+                <button onclick="sendCode()">Получить код</button>
                 <button class="secondary" onclick="showRegister()">Создать аккаунт</button>
                 <div id="auth-error" class="error"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code Verification Screen -->
+    <div id="code-screen" class="screen">
+        <div class="auth-container">
+            <div class="logo">JsGram</div>
+            <div class="auth-box">
+                <h2>Подтверждение</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Код отправлен на почту</p>
+                <input type="text" id="code-input" placeholder="Введите 6-значный код" maxlength="6" inputmode="numeric">
+                <button onclick="verifyCode()">Подтвердить</button>
+                <button class="secondary" onclick="resendCode()" id="resend-btn">Отправить повторно</button>
+                <button class="secondary" onclick="backToLogin()">Назад</button>
+                <div id="code-error" class="error"></div>
+                <div id="code-timer" class="timer"></div>
             </div>
         </div>
     </div>
@@ -259,6 +280,8 @@
         let messagesRef = null;
         let chatsRef = null;
         let messagesListener = null;
+        let pendingLogin = null; // {email, password, code}
+        let codeTimer = null;
 
         const db = firebase.database();
         const auth = firebase.auth();
@@ -285,24 +308,158 @@
         function showLogin() { 
             showScreen('auth-screen'); 
             document.getElementById('auth-error').textContent = '';
+            document.getElementById('auth-login').value = '';
+            document.getElementById('auth-password').value = '';
         }
         function showRegister() { 
             showScreen('register-screen'); 
             document.getElementById('reg-error').textContent = '';
         }
+        function backToLogin() {
+            clearInterval(codeTimer);
+            showLogin();
+        }
 
-        function login() {
-            const email = document.getElementById('auth-email').value.trim();
+        // Генерация 6-значного кода
+        function generateCode() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        // Отправка кода на почту через EmailJS
+        function sendCode() {
+            const loginInput = document.getElementById('auth-login').value.trim().toLowerCase();
             const password = document.getElementById('auth-password').value;
             const errorEl = document.getElementById('auth-error');
             
-            if (!email || !password) {
-                errorEl.textContent = 'Введите email и пароль';
+            if (!loginInput || !password) {
+                errorEl.textContent = 'Введите логин и пароль';
+                return;
+            }
+            if (password.length < 6) {
+                errorEl.textContent = 'Пароль минимум 6 символов';
+                return;
+            }
+
+            // Определяем email (если ввели username — ищем по базе)
+            let emailPromise;
+            if (loginInput.includes('@')) {
+                emailPromise = Promise.resolve(loginInput);
+            } else {
+                const username = loginInput.startsWith('@') ? loginInput.slice(1) : loginInput;
+                emailPromise = db.ref('usernames/' + username).once('value').then(snap => {
+                    const uid = snap.val();
+                    if (!uid) throw new Error('Пользователь не найден');
+                    return db.ref('users/' + uid + '/email').once('value').then(emailSnap => {
+                        const email = emailSnap.val();
+                        if (!email) throw new Error('Email не найден');
+                        return email;
+                    });
+                });
+            }
+
+            emailPromise.then(email => {
+                // Проверяем пароль через временный вход
+                return auth.signInWithEmailAndPassword(email, password).then(cred => {
+                    // Пароль верный — выходим, чтобы потребовать код
+                    return auth.signOut().then(() => email);
+                }).catch(err => {
+                    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                        throw new Error('Неверный пароль');
+                    }
+                    if (err.code === 'auth/user-not-found') {
+                        throw new Error('Пользователь не найден');
+                    }
+                    throw err;
+                });
+            }).then(email => {
+                const code = generateCode();
+                pendingLogin = { email, password, code, timestamp: Date.now() };
+
+                // Отправляем код через EmailJS
+                if (!EMAILJS_CONFIG.serviceId || EMAILJS_CONFIG.serviceId === 'ВАШ_SERVICE_ID') {
+                    // Демо-режим: показываем код в консоли
+                    console.log('DEMO CODE:', code);
+                    showScreen('code-screen');
+                    startCodeTimer();
+                    document.getElementById('code-error').textContent = 'DEMO: код в консоли (F12)';
+                    document.getElementById('code-error').className = 'success';
+                    return;
+                }
+
+                return emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
+                    to_email: email,
+                    to_name: 'Пользователь JsGram',
+                    from_name: 'JsGram Security',
+                    message: `Ваш код подтверждения: ${code}\n\nНикому не сообщайте этот код.\nЕсли вы не запрашивали вход, проигнорируйте это письмо.`
+                }).then(() => {
+                    showScreen('code-screen');
+                    startCodeTimer();
+                    document.getElementById('code-error').textContent = 'Код отправлен на ' + email;
+                    document.getElementById('code-error').className = 'success';
+                });
+            }).catch(err => {
+                errorEl.textContent = err.message || 'Ошибка';
+            });
+        }
+
+        function startCodeTimer() {
+            let seconds = 60;
+            const timerEl = document.getElementById('code-timer');
+            const resendBtn = document.getElementById('resend-btn');
+            resendBtn.disabled = true;
+            
+            clearInterval(codeTimer);
+            codeTimer = setInterval(() => {
+                seconds--;
+                if (seconds > 0) {
+                    timerEl.textContent = `Повторная отправка через ${seconds}с`;
+                } else {
+                    clearInterval(codeTimer);
+                    timerEl.textContent = '';
+                    resendBtn.disabled = false;
+                }
+            }, 1000);
+        }
+
+        function resendCode() {
+            if (!pendingLogin) return;
+            sendCode();
+        }
+
+        function verifyCode() {
+            const inputCode = document.getElementById('code-input').value.trim();
+            const errorEl = document.getElementById('code-error');
+            
+            if (!pendingLogin) {
+                errorEl.textContent = 'Сессия истекла, начните заново';
+                errorEl.className = 'error';
                 return;
             }
             
-            auth.signInWithEmailAndPassword(email, password)
-                .catch(err => errorEl.textContent = getAuthError(err.code));
+            // Код действителен 10 минут
+            if (Date.now() - pendingLogin.timestamp > 10 * 60 * 1000) {
+                errorEl.textContent = 'Код истёк, запросите новый';
+                errorEl.className = 'error';
+                pendingLogin = null;
+                return;
+            }
+            
+            if (inputCode !== pendingLogin.code) {
+                errorEl.textContent = 'Неверный код';
+                errorEl.className = 'error';
+                return;
+            }
+            
+            // Код верный — входим
+            auth.signInWithEmailAndPassword(pendingLogin.email, pendingLogin.password)
+                .then(() => {
+                    pendingLogin = null;
+                    clearInterval(codeTimer);
+                })
+                .catch(err => {
+                    errorEl.textContent = getAuthError(err.code);
+                    errorEl.className = 'error';
+                });
         }
 
         function register() {
@@ -372,6 +529,8 @@
             auth.signOut();
             closeDrawer();
             closeChat();
+            pendingLogin = null;
+            clearInterval(codeTimer);
         }
 
         function getAuthError(code) {
