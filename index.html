@@ -280,7 +280,7 @@
         let messagesRef = null;
         let chatsRef = null;
         let messagesListener = null;
-        let pendingLogin = null; // {email, password, code}
+        let pendingLogin = null;
         let codeTimer = null;
 
         const db = firebase.database();
@@ -320,12 +320,11 @@
             showLogin();
         }
 
-        // Генерация 6-значного кода
         function generateCode() {
             return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
-        // Отправка кода на почту через EmailJS
+        // ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ ВХОДА =====
         function sendCode() {
             const loginInput = document.getElementById('auth-login').value.trim().toLowerCase();
             const password = document.getElementById('auth-password').value;
@@ -340,44 +339,58 @@
                 return;
             }
 
-            // Определяем email (если ввели username — ищем по базе)
-            let emailPromise;
+            errorEl.textContent = 'Проверка...';
+
+            // Если ввели email напрямую
             if (loginInput.includes('@')) {
-                emailPromise = Promise.resolve(loginInput);
-            } else {
-                const username = loginInput.startsWith('@') ? loginInput.slice(1) : loginInput;
-                emailPromise = db.ref('usernames/' + username).once('value').then(snap => {
-                    const uid = snap.val();
-                    if (!uid) throw new Error('Пользователь не найден');
-                    return db.ref('users/' + uid + '/email').once('value').then(emailSnap => {
-                        const email = emailSnap.val();
-                        if (!email) throw new Error('Email не найден');
-                        return email;
-                    });
-                });
+                verifyAndSendCode(loginInput, password, errorEl);
+                return;
             }
 
-            emailPromise.then(email => {
-                // Проверяем пароль через временный вход
-                return auth.signInWithEmailAndPassword(email, password).then(cred => {
-                    // Пароль верный — выходим, чтобы потребовать код
-                    return auth.signOut().then(() => email);
-                }).catch(err => {
-                    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-                        throw new Error('Неверный пароль');
-                    }
-                    if (err.code === 'auth/user-not-found') {
-                        throw new Error('Пользователь не найден');
-                    }
-                    throw err;
+            // Если ввели username — ищем email через Cloud Function или публичный endpoint
+            // Но т.к. у нас нет бэкенда — делаем через временный анонимный вход
+            const username = loginInput.startsWith('@') ? loginInput.slice(1) : loginInput;
+            
+            // Сначала анонимный вход чтобы получить доступ к базе
+            auth.signInAnonymously().then(() => {
+                return db.ref('usernames/' + username).once('value');
+            }).then(snap => {
+                const uid = snap.val();
+                if (!uid) throw new Error('Пользователь не найден');
+                return db.ref('users/' + uid + '/email').once('value');
+            }).then(emailSnap => {
+                const email = emailSnap.val();
+                if (!email) throw new Error('Email не найден');
+                
+                // Выходим из анонима и проверяем пароль
+                return auth.signOut().then(() => {
+                    return verifyAndSendCode(email, password, errorEl);
                 });
+            }).catch(err => {
+                // Если уже анонимно вошли — выходим
+                auth.signOut().catch(() => {});
+                errorEl.textContent = err.message || 'Ошибка поиска пользователя';
+            });
+        }
+
+        function verifyAndSendCode(email, password, errorEl) {
+            // Проверяем пароль через временный вход
+            auth.signInWithEmailAndPassword(email, password).then(cred => {
+                // Пароль верный — выходим, требуем код
+                return auth.signOut().then(() => email);
+            }).catch(err => {
+                if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                    throw new Error('Неверный пароль');
+                }
+                if (err.code === 'auth/user-not-found') {
+                    throw new Error('Пользователь не найден');
+                }
+                throw err;
             }).then(email => {
                 const code = generateCode();
                 pendingLogin = { email, password, code, timestamp: Date.now() };
 
-                // Отправляем код через EmailJS
                 if (!EMAILJS_CONFIG.serviceId || EMAILJS_CONFIG.serviceId === 'ВАШ_SERVICE_ID') {
-                    // Демо-режим: показываем код в консоли
                     console.log('DEMO CODE:', code);
                     showScreen('code-screen');
                     startCodeTimer();
@@ -394,12 +407,18 @@
                 }).then(() => {
                     showScreen('code-screen');
                     startCodeTimer();
-                    document.getElementById('code-error').textContent = 'Код отправлен на ' + email;
+                    document.getElementById('code-error').textContent = 'Код отправлен на ' + maskEmail(email);
                     document.getElementById('code-error').className = 'success';
                 });
             }).catch(err => {
                 errorEl.textContent = err.message || 'Ошибка';
             });
+        }
+
+        function maskEmail(email) {
+            const [user, domain] = email.split('@');
+            const masked = user.charAt(0) + '***' + user.charAt(user.length - 1);
+            return masked + '@' + domain;
         }
 
         function startCodeTimer() {
@@ -436,7 +455,6 @@
                 return;
             }
             
-            // Код действителен 10 минут
             if (Date.now() - pendingLogin.timestamp > 10 * 60 * 1000) {
                 errorEl.textContent = 'Код истёк, запросите новый';
                 errorEl.className = 'error';
@@ -450,7 +468,6 @@
                 return;
             }
             
-            // Код верный — входим
             auth.signInWithEmailAndPassword(pendingLogin.email, pendingLogin.password)
                 .then(() => {
                     pendingLogin = null;
@@ -482,16 +499,14 @@
                 return;
             }
             
+            errorEl.textContent = 'Регистрация...';
+            
             db.ref('usernames/' + username).once('value').then(snap => {
                 if (snap.exists()) {
-                    errorEl.textContent = 'Этот username уже занят';
-                    return;
+                    throw new Error('Этот username уже занят');
                 }
-                
                 return auth.createUserWithEmailAndPassword(email, password);
             }).then(cred => {
-                if (!cred) return;
-                
                 const userData = {
                     uid: cred.user.uid,
                     name: name,
@@ -517,7 +532,7 @@
                     }).catch(err => console.log('Email error:', err));
                 }
             }).catch(err => {
-                errorEl.textContent = getAuthError(err.code) || err.message;
+                errorEl.textContent = err.message || getAuthError(err.code) || 'Ошибка регистрации';
             });
         }
 
